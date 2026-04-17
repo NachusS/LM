@@ -252,11 +252,40 @@ input:focus, select:focus, textarea:focus {
 .stats-grid.compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+.results-combined {
+  margin-top: 16px;
+  display: grid;
+  gap: 16px;
+}
+.results-top,
+.results-bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.results-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0), rgba(148, 163, 184, .9), rgba(148, 163, 184, 0));
+}
 .stat {
   border-radius: 22px;
   border: 1px solid var(--border);
   background: #f8fafc;
   padding: 14px;
+}
+.stat.featured {
+  background: linear-gradient(135deg, #f97316, #ec4899);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 20px 38px rgba(236, 72, 153, 0.18);
+}
+.stat.featured .label,
+.stat.featured .sub,
+.stat.featured .value {
+  color: white;
+}
+.stat.featured .value {
+  font-size: 2rem;
 }
 .stat .label {
   text-transform: uppercase;
@@ -414,5 +443,12 @@ input:focus, select:focus, textarea:focus {
   .tab {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 720px) {
+  .results-top,
+  .results-bottom {
+    grid-template-columns: 1fr;
   }
 }

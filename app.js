@@ -121,10 +121,15 @@ function bindActions() {
 
 function updateForm(key, value) {
   state.form[key] = value;
-  if (key === 'leaveEndDate' && value && !state.form.lactationStartDate) {
-    const next = addDays(toDate(value), 1);
-    state.form.lactationStartDate = toISO(next);
-    el.lactationStartDate.value = state.form.lactationStartDate;
+  if (key === 'leaveEndDate') {
+    if (value) {
+      const next = addDays(toDate(value), 1);
+      state.form.lactationStartDate = toISO(next);
+      el.lactationStartDate.value = state.form.lactationStartDate;
+    } else {
+      state.form.lactationStartDate = '';
+      el.lactationStartDate.value = '';
+    }
   }
   renderCalculations();
   renderOcr();
@@ -207,26 +212,26 @@ function renderCalculations() {
     ? `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)} (limitado por fin de contrato)`
     : `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)}`;
 
-  el.hourStats.innerHTML = [
-    statHtml('Horas totales', `${formatNumber(hourResult.totalHours)} h`, `${hourResult.totalEligibleWorkdays} días laborables computables`),
-    statHtml('Horas pendientes', `${formatNumber(hourResult.remainingHours)} h`, `${formatNumber(hourResult.eqDays)} jornadas equivalentes`),
-    statHtml('Jornadas completas', `${hourResult.wholeDays}`, `+ ${formatNumber(hourResult.remainderHours)} h restantes`),
-    statHtml('Horas consumidas', `${formatNumber(hourResult.consumedHours)} h`, `${hourResult.consumedEligibleWorkdays} días ya transcurridos`)
-  ].join('');
-
-  const smsCreditSub = smsResult.startUsed
-    ? (smsResult.limitedByContract ? 'Crédito limitado por contrato' : 'Días naturales utilizables')
-    : 'Pendiente de fecha de inicio';
-
-  el.smsStats.innerHTML = [
-    statHtml('Crédito SMS', `${formatNumber(smsResult.totalDays)} días`, smsCreditSub),
-    statHtml('Saldo SMS', `${formatNumber(smsResult.remainingNaturalDays)} días`, 'Pendiente'),
-    statHtml('Consumidos SMS', `${formatNumber(smsResult.consumedNaturalDays)} días`, state.form.lactationStartDate ? 'Desde el inicio informado' : 'Pendiente de fecha de inicio'),
-    statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', smsResult.projectedEnd ? (smsResult.limitedByContract ? 'Limitado por contrato' : 'Dentro del periodo disponible') : 'Solo si se conoce la fecha de inicio')
-  ].join('');
+  el.hourStats.innerHTML = `
+    <div class="results-combined">
+      <div class="results-top">
+        ${statHtml('Jornadas completas Lactancia', `${hourResult.wholeDays}`, `+ ${formatNumber(hourResult.remainderHours)} h restantes`, 'featured')}
+        ${statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', smsResult.projectedEnd ? (smsResult.limitedByContract ? 'Limitado por contrato' : 'Dentro del periodo disponible') : 'Solo si se conoce la fecha de inicio')}
+      </div>
+      <div class="results-divider"></div>
+      <div class="results-bottom">
+        ${statHtml('Horas totales', `${formatNumber(hourResult.totalHours)} h`, `${hourResult.totalEligibleWorkdays} días laborables computables`)}
+        ${statHtml('Horas pendientes', `${formatNumber(hourResult.remainingHours)} h`, `${formatNumber(hourResult.eqDays)} jornadas equivalentes`)}
+        ${statHtml('Jornadas consumidas', `${formatNumber(hourResult.consumedEqDays)}`, `${hourResult.consumedEligibleWorkdays} días laborables ya transcurridos`)}
+        ${statHtml('Horas consumidas', `${formatNumber(hourResult.consumedHours)} h`, 'Consumo acumulado hasta la fecha de consulta')}
+      </div>
+    </div>
+  `;
+  el.smsStats.innerHTML = '';
 
   el.expedientSummary.innerHTML = `
     <p><strong>Situación:</strong> ${escapeHtml(labelizeCase(state.form.caseType))}</p>
+    <p><strong>Nº de Jornadas Lactancia:</strong> ${escapeHtml(String(hourResult.wholeDays))} &nbsp;&nbsp; <strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h`)}</p>
     <p><strong>Fecha causante:</strong> ${escapeHtml(formatDate(state.form.birthDate))}</p>
     <p><strong>Inicio contrato:</strong> ${escapeHtml(formatDate(state.form.contractStartDate))}</p>
     <p><strong>Fin contrato:</strong> ${escapeHtml(formatDate(state.form.contractEndDate || state.form.asOfDate || todayISO))}${state.form.contractEndDate ? '' : ' <em>(contrato abierto)</em>'}</p>
@@ -234,14 +239,13 @@ function renderCalculations() {
     <p><strong>Inicio efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.calcFrom))}</p>
     <p><strong>Fin por edad del menor:</strong> ${escapeHtml(formatDate(hourResult.lastEntitlementDay))}</p>
     <p><strong>Fin efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.effectiveLastEntitlementDay))}${hourResult.limitedByContract ? ' <em>(limitado por contrato)</em>' : ''}</p>
-    <p><strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h (${formatNumber(hourResult.eqDays)} jornadas equivalentes)`)}</p>
     <p><strong>Saldo acumulado SMS:</strong> ${escapeHtml(`${formatNumber(smsResult.remainingNaturalDays)} días naturales`)}</p>
   `;
 }
 
-function statHtml(label, value, sub) {
+function statHtml(label, value, sub, extraClass = '') {
   return `
-    <article class="stat">
+    <article class="stat ${escapeHtml(extraClass)}">
       <div class="label">${escapeHtml(label)}</div>
       <div class="value">${escapeHtml(value)}</div>
       <div class="sub">${escapeHtml(sub)}</div>
@@ -297,6 +301,7 @@ function computeHourEngine() {
   const eqDays = dailyHours > 0 ? round2(remainingHours / dailyHours) : 0;
   const wholeDays = dailyHours > 0 ? Math.floor(remainingHours / dailyHours) : 0;
   const remainderHours = dailyHours > 0 ? round2(remainingHours - wholeDays * dailyHours) : 0;
+  const consumedEqDays = dailyHours > 0 ? round2(consumedHours / dailyHours) : 0;
 
   let noAvailabilityReason = '';
   if (!hasWindow) {
@@ -324,7 +329,8 @@ function computeHourEngine() {
     remainingHours,
     eqDays,
     wholeDays,
-    remainderHours
+    remainderHours,
+    consumedEqDays
   };
 }
 
@@ -534,10 +540,9 @@ function applyOcrToForm() {
 
     state.form.contractEndDate = incorporationRecord.end || '';
     el.contractEndDate.value = state.form.contractEndDate;
+  }
 
-    state.form.lactationStartDate = incorporationRecord.start;
-    el.lactationStartDate.value = state.form.lactationStartDate;
-  } else if (birthRecord?.end) {
+  if (birthRecord?.end) {
     state.form.lactationStartDate = toISO(addDays(toDate(birthRecord.end), 1));
     el.lactationStartDate.value = state.form.lactationStartDate;
   }
