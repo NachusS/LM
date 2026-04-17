@@ -469,11 +469,8 @@ function applyOcrToForm() {
   }
 
   state.excludedRanges = [...state.excludedRanges, ...discountableRanges];
-  const ocrLines = records.map(r => `${r.label}: ${formatDate(r.start)} - ${formatDate(r.end || r.effectiveEnd)}`).join('
-');
-  state.form.notes = [state.form.notes, 'OCR aplicado y validado en tabla de comprobación.', ocrLines].filter(Boolean).join('
-
-');
+  const ocrLines = records.map(r => `${r.label}: ${formatDate(r.start)} - ${formatDate(r.end || r.effectiveEnd)}`).join('\n');
+  state.form.notes = [state.form.notes, 'OCR aplicado y validado en tabla de comprobación.', ocrLines].filter(Boolean).join('\n\n');
   el.notes.value = state.form.notes;
 
   renderExcludedRanges();
