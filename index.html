@@ -11,34 +11,27 @@
   <body>
     <div class="app-shell">
       <header class="hero">
-        <div>
-          <div class="hero-badges">
-            <span class="badge badge-blue">Servicio Murciano de Salud</span>
-            <span class="badge badge-green">Calculadora 2026</span>
-            <span class="badge">GitHub Pages</span>
+        <div class="hero-main">
+          <div class="hero-copy">
+            <div class="hero-badges">
+              <span class="badge badge-blue">Servicio Murciano de Salud</span>
+              <span class="badge badge-green">Calculadora 2026</span>
+              <span class="badge">GitHub Pages</span>
+            </div>
+            <h1>Calculadora de lactancia SMS 2026</h1>
+            <p>
+              App estática y responsive para calcular saldo de lactancia en horas o días,
+              revisar incidencias descontables y extraer movimientos desde capturas con OCR.
+            </p>
           </div>
-          <h1>Calculadora de lactancia SMS 2026</h1>
-          <p>
-            App estática y responsive para calcular saldo de lactancia en horas o días,
-            revisar incidencias descontables y extraer movimientos desde capturas con OCR.
-          </p>
-        </div>
-        <div class="hero-summary card soft-dark">
-          <h2>Qué incluye</h2>
-          <ul>
-            <li>Cálculo exacto por horas hasta los 12 meses.</li>
-            <li>Vista acumulada SMS de 28 días.</li>
-            <li>OCR estructurado por filas: concepto, inicio y fin.</li>
-            <li>Tabla editable con días naturales, laborables y horas.</li>
-          </ul>
+
+          <nav class="tabs hero-tabs" aria-label="Navegación principal">
+            <button class="tab active" data-tab="calculator">Calculadora</button>
+            <button class="tab" data-tab="ocr">Subir imagen</button>
+            <button class="tab" data-tab="help">Ayuda</button>
+          </nav>
         </div>
       </header>
-
-      <nav class="tabs">
-        <button class="tab active" data-tab="calculator">Calculadora</button>
-        <button class="tab" data-tab="ocr">Subir imagen</button>
-        <button class="tab" data-tab="help">Ayuda</button>
-      </nav>
 
       <main>
         <section id="tab-calculator" class="tab-panel active">
@@ -259,10 +252,10 @@
                 <article class="help-block">
                   <h3>OCR estructurado</h3>
                   <ol>
-                    <li>Reconoce filas por concepto + fecha inicio + fecha fin.</li>
-                    <li>Si la fecha fin está vacía, usa la fecha de consulta.</li>
-                    <li>Calcula días naturales, laborables y horas por rango.</li>
-                    <li>Permite corregir la tabla antes de volcarla al formulario.</li>
+                    <li>Detecta Tipo de Movimiento, Fecha Inicio y Fecha Fin.</li>
+                    <li>Agrupa la información en filas editables.</li>
+                    <li>Si el fin no aparece, usa la fecha de consulta.</li>
+                    <li>Pasa los datos útiles al formulario principal.</li>
                   </ol>
                 </article>
               </div>
