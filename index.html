@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calculadora de Lactancia SMS 2026</title>
+    <meta name="description" content="Calculadora responsive para permiso de lactancia del Servicio Murciano de Salud con OCR estructurado." />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <div class="hero-badges">
+            <span class="badge badge-blue">Servicio Murciano de Salud</span>
+            <span class="badge badge-green">Calculadora 2026</span>
+            <span class="badge">GitHub Pages</span>
+          </div>
+          <h1>Calculadora de lactancia SMS 2026</h1>
+          <p>
+            App estática y responsive para calcular saldo de lactancia en horas o días,
+            revisar incidencias descontables y extraer movimientos desde capturas con OCR.
+          </p>
+        </div>
+        <div class="hero-summary card soft-dark">
+          <h2>Qué incluye</h2>
+          <ul>
+            <li>Cálculo exacto por horas hasta los 12 meses.</li>
+            <li>Vista acumulada SMS de 28 días.</li>
+            <li>OCR estructurado por filas: concepto, inicio y fin.</li>
+            <li>Tabla editable con días naturales, laborables y horas.</li>
+          </ul>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="calculator">Calculadora</button>
+        <button class="tab" data-tab="ocr">Subir imagen</button>
+        <button class="tab" data-tab="help">Ayuda</button>
+      </nav>
+
+      <main>
+        <section id="tab-calculator" class="tab-panel active">
+          <div class="grid two-columns">
+            <div class="stack-lg">
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Datos del expediente</h2>
+                    <p>Introduce la situación y las fechas relevantes.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    <span>Situación causante</span>
+                    <select id="caseType">
+                      <option value="nacimiento">Nacimiento</option>
+                      <option value="adopcion">Adopción</option>
+                      <option value="guarda">Guarda con fines de adopción</option>
+                      <option value="acogimiento">Acogimiento</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Vista principal</span>
+                    <select id="enjoymentMode">
+                      <option value="sms28">Acumulado SMS (28 días)</option>
+                      <option value="hours">Exacto por horas</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Fecha del nacimiento / adopción</span>
+                    <input id="birthDate" type="date" />
+                  </label>
+
+                  <label>
+                    <span>Fin del permiso de nacimiento / adopción</span>
+                    <input id="leaveEndDate" type="date" />
+                  </label>
+
+                  <label>
+                    <span>Inicio real del disfrute de lactancia</span>
+                    <input id="lactationStartDate" type="date" />
+                  </label>
+
+                  <label>
+                    <span>Fecha de consulta</span>
+                    <input id="asOfDate" type="date" />
+                  </label>
+
+                  <label>
+                    <span>Número de menores causantes</span>
+                    <input id="multipleChildren" type="number" min="1" step="1" value="1" />
+                  </label>
+
+                  <label>
+                    <span>Horas de jornada diaria</span>
+                    <input id="dailyHours" type="number" min="1" step="0.25" value="7.5" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Calendario y exclusiones</h2>
+                    <p>Se utilizan en el cálculo exacto por horas.</p>
+                  </div>
+                </div>
+
+                <div class="stack-md">
+                  <div>
+                    <div class="label-title">Días habituales de trabajo</div>
+                    <div class="workday-row" id="workdays"></div>
+                  </div>
+
+                  <label>
+                    <span>Fechas aisladas no computables</span>
+                    <textarea id="excludedDatesText" rows="4" placeholder="2026-08-15&#10;2026-09-08"></textarea>
+                  </label>
+
+                  <div>
+                    <div class="inline-header">
+                      <div>
+                        <div class="label-title">Tramos no computables</div>
+                        <div class="hint">IT, excedencia, vacaciones, formación o huelga.</div>
+                      </div>
+                      <button id="addRangeBtn" class="button secondary">Añadir tramo</button>
+                    </div>
+                    <div id="excludedRanges"></div>
+                  </div>
+
+                  <label>
+                    <span>Horas ya consumidas manualmente</span>
+                    <input id="alreadyUsedHours" type="number" min="0" step="0.25" value="0" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="card">
+                <label>
+                  <span>Observaciones internas</span>
+                  <textarea id="notes" rows="5" placeholder="Criterio de gerencia, vacaciones unidas, incidencias detectadas por OCR..."></textarea>
+                </label>
+              </section>
+            </div>
+
+            <div class="stack-lg">
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Resultado del cálculo</h2>
+                    <p id="resultSubtitle">Introduce los datos mínimos para calcular.</p>
+                  </div>
+                </div>
+                <div id="calcWarnings"></div>
+                <div class="stats-grid" id="hourStats"></div>
+                <div class="stats-grid" id="smsStats"></div>
+              </section>
+
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Resumen listo para expediente</h2>
+                    <p>Texto operativo con las fechas y el saldo calculado.</p>
+                  </div>
+                </div>
+                <div id="expedientSummary" class="summary-box"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-ocr" class="tab-panel">
+          <div class="grid two-columns">
+            <div class="stack-lg">
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Reconocimiento de movimientos</h2>
+                    <p>Sube una captura con Tipo de Movimiento, Fecha Inicio y Fecha Fin.</p>
+                  </div>
+                </div>
+
+                <label class="upload-box" for="ocrFileInput">
+                  <input id="ocrFileInput" type="file" accept="image/*" />
+                  <strong>Seleccionar imagen</strong>
+                  <span>JPG o PNG. Si la fecha fin viene vacía, se usará la fecha de consulta.</span>
+                </label>
+
+                <div id="ocrStatus" class="status muted">Esperando imagen.</div>
+                <div id="ocrPreviewWrap" class="preview-wrap hidden">
+                  <img id="ocrPreview" alt="Vista previa de la captura" />
+                </div>
+              </section>
+
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Texto reconocido</h2>
+                    <p>Útil para revisar cómo se ha reconstruido la tabla.</p>
+                  </div>
+                </div>
+                <div id="ocrDates" class="badges"></div>
+                <textarea id="ocrRawText" rows="14" readonly></textarea>
+              </section>
+            </div>
+
+            <div class="stack-lg">
+              <section class="card">
+                <div class="card-header">
+                  <div>
+                    <h2>Tabla de comprobación OCR</h2>
+                    <p>Corrige conceptos o fechas antes de pasarlos al formulario inicial.</p>
+                  </div>
+                  <button id="applyOcrBtn" class="button primary" disabled>Pasar tabla al formulario</button>
+                </div>
+
+                <div class="stats-grid compact" id="ocrSummaryStats"></div>
+                <div id="ocrTableWrap" class="table-wrap empty-state">
+                  Cuando el OCR detecte movimientos, aparecerán aquí agrupados por filas.
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-help" class="tab-panel">
+          <div class="stack-lg">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>Cómo funciona</h2>
+                  <p>La app combina un cálculo manual y un OCR estructurado para revisar expedientes.</p>
+                </div>
+              </div>
+              <div class="help-grid">
+                <article class="help-block">
+                  <h3>Motor exacto por horas</h3>
+                  <ol>
+                    <li>Parte de la fecha causante.</li>
+                    <li>Cuenta 1 hora por cada día laborable efectivo hasta la víspera de los 12 meses.</li>
+                    <li>Aplica el calendario semanal elegido.</li>
+                    <li>Excluye fechas aisladas y tramos no computables.</li>
+                    <li>Convierte el saldo a jornadas equivalentes.</li>
+                  </ol>
+                </article>
+                <article class="help-block">
+                  <h3>Motor acumulado SMS</h3>
+                  <ol>
+                    <li>Muestra 28 días naturales por menor.</li>
+                    <li>Amplía proporcionalmente en supuestos múltiples.</li>
+                    <li>Si indicas la fecha de inicio real, descuenta los días consumidos.</li>
+                    <li>Proyecta la fecha final del disfrute acumulado.</li>
+                  </ol>
+                </article>
+                <article class="help-block">
+                  <h3>OCR estructurado</h3>
+                  <ol>
+                    <li>Reconoce filas por concepto + fecha inicio + fecha fin.</li>
+                    <li>Si la fecha fin está vacía, usa la fecha de consulta.</li>
+                    <li>Calcula días naturales, laborables y horas por rango.</li>
+                    <li>Permite corregir la tabla antes de volcarla al formulario.</li>
+                  </ol>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
