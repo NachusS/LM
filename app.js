@@ -196,7 +196,17 @@ function renderCalculations() {
     return;
   }
 
-  el.resultSubtitle.textContent = `Fin del derecho por edad del menor: ${formatDate(hourResult.lastEntitlementDay)}`;
+  const notices = [];
+  if (hourResult.adjustedStartByBirth) notices.push('La fecha de inicio real del disfrute es anterior a la fecha causante; se usa la fecha causante como inicio efectivo.');
+  if (hourResult.adjustedStartByContract) notices.push('La fecha de inicio real del disfrute es anterior al inicio del contrato; se usa la fecha de inicio de contrato como inicio efectivo.');
+  if (hourResult.limitedByContract) notices.push('El cálculo se ha limitado por la fecha fin de contrato.');
+  if (hourResult.noAvailabilityReason) notices.push(hourResult.noAvailabilityReason);
+  el.calcWarnings.innerHTML = notices.map(text => `<div class="notice info">${escapeHtml(text)}</div>`).join('');
+
+  el.resultSubtitle.textContent = hourResult.limitedByContract
+    ? `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)} (limitado por fin de contrato)`
+    : `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)}`;
+
   el.hourStats.innerHTML = [
     statHtml('Horas totales', `${formatNumber(hourResult.totalHours)} h`, `${hourResult.totalEligibleWorkdays} días laborables computables`),
     statHtml('Horas pendientes', `${formatNumber(hourResult.remainingHours)} h`, `${formatNumber(hourResult.eqDays)} jornadas equivalentes`),
@@ -204,11 +214,15 @@ function renderCalculations() {
     statHtml('Horas consumidas', `${formatNumber(hourResult.consumedHours)} h`, `${hourResult.consumedEligibleWorkdays} días ya transcurridos`)
   ].join('');
 
+  const smsCreditSub = smsResult.startUsed
+    ? (smsResult.limitedByContract ? 'Crédito limitado por contrato' : 'Días naturales utilizables')
+    : 'Pendiente de fecha de inicio';
+
   el.smsStats.innerHTML = [
-    statHtml('Crédito SMS', `${formatNumber(smsResult.totalDays)} días`, 'Días naturales'),
+    statHtml('Crédito SMS', `${formatNumber(smsResult.totalDays)} días`, smsCreditSub),
     statHtml('Saldo SMS', `${formatNumber(smsResult.remainingNaturalDays)} días`, 'Pendiente'),
     statHtml('Consumidos SMS', `${formatNumber(smsResult.consumedNaturalDays)} días`, state.form.lactationStartDate ? 'Desde el inicio informado' : 'Pendiente de fecha de inicio'),
-    statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', 'Solo si se conoce la fecha de inicio')
+    statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', smsResult.projectedEnd ? (smsResult.limitedByContract ? 'Limitado por contrato' : 'Dentro del periodo disponible') : 'Solo si se conoce la fecha de inicio')
   ].join('');
 
   el.expedientSummary.innerHTML = `
@@ -216,8 +230,10 @@ function renderCalculations() {
     <p><strong>Fecha causante:</strong> ${escapeHtml(formatDate(state.form.birthDate))}</p>
     <p><strong>Inicio contrato:</strong> ${escapeHtml(formatDate(state.form.contractStartDate))}</p>
     <p><strong>Fin contrato:</strong> ${escapeHtml(formatDate(state.form.contractEndDate || state.form.asOfDate || todayISO))}${state.form.contractEndDate ? '' : ' <em>(contrato abierto)</em>'}</p>
-    <p><strong>Inicio del disfrute comunicado:</strong> ${escapeHtml(formatDate(state.form.lactationStartDate))}</p>
-    <p><strong>Fin del derecho por edad:</strong> ${escapeHtml(formatDate(hourResult.lastEntitlementDay))}</p>
+    <p><strong>Inicio real del disfrute:</strong> ${escapeHtml(formatDate(state.form.lactationStartDate))}</p>
+    <p><strong>Inicio efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.calcFrom))}</p>
+    <p><strong>Fin por edad del menor:</strong> ${escapeHtml(formatDate(hourResult.lastEntitlementDay))}</p>
+    <p><strong>Fin efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.effectiveLastEntitlementDay))}${hourResult.limitedByContract ? ' <em>(limitado por contrato)</em>' : ''}</p>
     <p><strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h (${formatNumber(hourResult.eqDays)} jornadas equivalentes)`)}</p>
     <p><strong>Saldo acumulado SMS:</strong> ${escapeHtml(`${formatNumber(smsResult.remainingNaturalDays)} días naturales`)}</p>
   `;
@@ -234,37 +250,73 @@ function statHtml(label, value, sub) {
 }
 
 function computeHourEngine() {
-  const { birthDate, leaveEndDate, lactationStartDate, asOfDate, multipleChildren, dailyHours, workdays, alreadyUsedHours, excludedDatesText } = state.form;
+  const {
+    birthDate,
+    leaveEndDate,
+    contractStartDate,
+    contractEndDate,
+    lactationStartDate,
+    asOfDate,
+    multipleChildren,
+    dailyHours,
+    workdays,
+    alreadyUsedHours,
+    excludedDatesText
+  } = state.form;
+
   if (!birthDate) return { valid: false, reason: 'Falta la fecha del nacimiento, adopción o acogimiento.' };
 
   const turns12 = addMonthsISO(birthDate, 12);
+  const lastEntitlementDay = toISO(addDays(toDate(turns12), -1));
   const theoreticalStart = lactationStartDate || (leaveEndDate ? toISO(addDays(toDate(leaveEndDate), 1)) : birthDate);
-  const calcFrom = maxDateIso(theoreticalStart, birthDate);
+  const calcFrom = maxDateIso(theoreticalStart, birthDate, contractStartDate || '');
+  const contractEndExclusive = contractEndDate ? toISO(addDays(toDate(contractEndDate), 1)) : '';
+  const effectiveWindowEndExclusive = minDateIso(turns12, contractEndExclusive || turns12);
+  const effectiveLastEntitlementDay = effectiveWindowEndExclusive ? toISO(addDays(toDate(effectiveWindowEndExclusive), -1)) : '';
   const isolatedExcluded = parseExcludedDates(excludedDatesText);
   const hourFactor = Math.max(1, Number(multipleChildren) || 1);
+  const calcFromDate = toDate(calcFrom);
+  const windowEndDate = toDate(effectiveWindowEndExclusive);
+  const hasWindow = calcFromDate && windowEndDate && calcFromDate < windowEndDate;
 
-  const allEligibleDays = eachDay(calcFrom, turns12).filter(iso => {
+  const allEligibleDays = hasWindow ? eachDay(calcFrom, effectiveWindowEndExclusive).filter(iso => {
     const weekday = toDate(iso).getDay();
     return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges);
-  });
+  }) : [];
 
-  const consumedEligibleDays = eachDay(calcFrom, minDateIso(asOfDate || todayISO, turns12)).filter(iso => {
+  const consumedUntilExclusive = hasWindow ? minDateIso(asOfDate || todayISO, effectiveWindowEndExclusive) : '';
+  const consumedEligibleDays = hasWindow ? eachDay(calcFrom, consumedUntilExclusive).filter(iso => {
     const weekday = toDate(iso).getDay();
     return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges);
-  });
+  }) : [];
 
   const totalHours = round2(allEligibleDays.length * hourFactor);
   const consumedHoursByCalendar = round2(consumedEligibleDays.length * hourFactor);
-  const consumedHours = Math.max(consumedHoursByCalendar, Number(alreadyUsedHours) || 0);
+  const consumedHours = Math.min(totalHours, Math.max(consumedHoursByCalendar, Number(alreadyUsedHours) || 0));
   const remainingHours = Math.max(0, round2(totalHours - consumedHours));
   const eqDays = dailyHours > 0 ? round2(remainingHours / dailyHours) : 0;
   const wholeDays = dailyHours > 0 ? Math.floor(remainingHours / dailyHours) : 0;
   const remainderHours = dailyHours > 0 ? round2(remainingHours - wholeDays * dailyHours) : 0;
 
+  let noAvailabilityReason = '';
+  if (!hasWindow) {
+    if (contractEndDate && calcFromDate && toDate(contractEndDate) && calcFromDate > toDate(contractEndDate)) {
+      noAvailabilityReason = 'La fecha de inicio real del disfrute es posterior a la fecha fin de contrato.';
+    } else if (effectiveLastEntitlementDay && calcFromDate && calcFromDate > toDate(effectiveLastEntitlementDay)) {
+      noAvailabilityReason = 'La fecha de inicio real del disfrute queda fuera del periodo de disfrute disponible.';
+    }
+  }
+
   return {
     valid: true,
     turns12,
-    lastEntitlementDay: toISO(addDays(toDate(turns12), -1)),
+    calcFrom,
+    lastEntitlementDay,
+    effectiveLastEntitlementDay,
+    limitedByContract: Boolean(contractEndDate && effectiveLastEntitlementDay && effectiveLastEntitlementDay === contractEndDate && contractEndDate < lastEntitlementDay),
+    adjustedStartByBirth: Boolean(theoreticalStart && birthDate && theoreticalStart < birthDate),
+    adjustedStartByContract: Boolean(theoreticalStart && contractStartDate && theoreticalStart < contractStartDate),
+    noAvailabilityReason,
     totalEligibleWorkdays: allEligibleDays.length,
     consumedEligibleWorkdays: consumedEligibleDays.length,
     totalHours,
@@ -277,23 +329,37 @@ function computeHourEngine() {
 }
 
 function computeSms28Engine() {
-  const totalDays = 28 * Math.max(1, Number(state.form.multipleChildren) || 1);
+  const theoreticalTotalDays = 28 * Math.max(1, Number(state.form.multipleChildren) || 1);
   const start = state.form.lactationStartDate;
   const asOf = state.form.asOfDate || todayISO;
-  let consumedNaturalDays = 0;
-  let projectedEnd = '';
+  const contractEndDate = state.form.contractEndDate || '';
+  const lastByAge = state.form.birthDate ? toISO(addDays(toDate(addMonthsISO(state.form.birthDate, 12)), -1)) : '';
 
-  if (start) {
-    projectedEnd = toISO(addDays(toDate(start), totalDays - 1));
-    if (asOf >= start) consumedNaturalDays = Math.max(0, diffDaysInclusive(start, minDateIso(asOf, projectedEnd)));
-    consumedNaturalDays = Math.min(consumedNaturalDays, totalDays);
+  if (!start) {
+    return {
+      startUsed: false,
+      totalDays: theoreticalTotalDays,
+      consumedNaturalDays: 0,
+      remainingNaturalDays: theoreticalTotalDays,
+      projectedEnd: '',
+      limitedByContract: false
+    };
   }
 
+  const theoreticalEnd = toISO(addDays(toDate(start), theoreticalTotalDays - 1));
+  const projectedEnd = minDateIso(theoreticalEnd, contractEndDate || theoreticalEnd, lastByAge || theoreticalEnd);
+  const limitedByContract = Boolean(contractEndDate && projectedEnd === contractEndDate && contractEndDate < theoreticalEnd);
+  const totalDays = projectedEnd && projectedEnd >= start ? Math.min(theoreticalTotalDays, diffDaysInclusive(start, projectedEnd)) : 0;
+  const effectiveAsOf = projectedEnd ? minDateIso(asOf, projectedEnd) : '';
+  const consumedNaturalDays = effectiveAsOf && effectiveAsOf >= start ? Math.min(totalDays, diffDaysInclusive(start, effectiveAsOf)) : 0;
+
   return {
+    startUsed: true,
     totalDays,
     consumedNaturalDays,
     remainingNaturalDays: Math.max(0, totalDays - consumedNaturalDays),
-    projectedEnd
+    projectedEnd,
+    limitedByContract
   };
 }
 
