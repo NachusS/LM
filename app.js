@@ -28,6 +28,7 @@ const OCR_HEADER_PATTERNS = [
 ];
 
 const MOVEMENT_DEFINITION_MAP = Object.fromEntries(MOVEMENT_DEFINITIONS.map(item => [item.key, item]));
+const FIXED_NON_COMPUTABLE_WEEKDAYS = [1, 2, 3, 4, 5];
 
 const todayISO = new Date().toISOString().slice(0, 10);
 
@@ -121,15 +122,10 @@ function bindActions() {
 
 function updateForm(key, value) {
   state.form[key] = value;
-  if (key === 'leaveEndDate') {
-    if (value) {
-      const next = addDays(toDate(value), 1);
-      state.form.lactationStartDate = toISO(next);
-      el.lactationStartDate.value = state.form.lactationStartDate;
-    } else {
-      state.form.lactationStartDate = '';
-      el.lactationStartDate.value = '';
-    }
+  if (key === 'leaveEndDate' && value && !state.form.lactationStartDate) {
+    const next = addDays(toDate(value), 1);
+    state.form.lactationStartDate = toISO(next);
+    el.lactationStartDate.value = state.form.lactationStartDate;
   }
   renderCalculations();
   renderOcr();
@@ -212,26 +208,26 @@ function renderCalculations() {
     ? `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)} (limitado por fin de contrato)`
     : `Fin efectivo del cálculo: ${formatDate(hourResult.effectiveLastEntitlementDay)}`;
 
-  el.hourStats.innerHTML = `
-    <div class="results-combined">
-      <div class="results-top">
-        ${statHtml('Jornadas completas Lactancia', `${hourResult.wholeDays}`, `+ ${formatNumber(hourResult.remainderHours)} h restantes`, 'featured')}
-        ${statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', smsResult.projectedEnd ? (smsResult.limitedByContract ? 'Limitado por contrato' : 'Dentro del periodo disponible') : 'Solo si se conoce la fecha de inicio')}
-      </div>
-      <div class="results-divider"></div>
-      <div class="results-bottom">
-        ${statHtml('Horas totales', `${formatNumber(hourResult.totalHours)} h`, `${hourResult.totalEligibleWorkdays} días laborables computables`)}
-        ${statHtml('Horas pendientes', `${formatNumber(hourResult.remainingHours)} h`, `${formatNumber(hourResult.eqDays)} jornadas equivalentes`)}
-        ${statHtml('Jornadas consumidas', `${formatNumber(hourResult.consumedEqDays)}`, `${hourResult.consumedEligibleWorkdays} días laborables ya transcurridos`)}
-        ${statHtml('Horas consumidas', `${formatNumber(hourResult.consumedHours)} h`, 'Consumo acumulado hasta la fecha de consulta')}
-      </div>
-    </div>
-  `;
-  el.smsStats.innerHTML = '';
+  el.hourStats.innerHTML = [
+    statHtml('Horas totales', `${formatNumber(hourResult.totalHours)} h`, `${hourResult.totalEligibleWorkdays} días laborables computables`),
+    statHtml('Horas pendientes', `${formatNumber(hourResult.remainingHours)} h`, `${formatNumber(hourResult.eqDays)} jornadas equivalentes`),
+    statHtml('Jornadas completas', `${hourResult.wholeDays}`, `+ ${formatNumber(hourResult.remainderHours)} h restantes`),
+    statHtml('Horas consumidas', `${formatNumber(hourResult.consumedHours)} h`, `${hourResult.consumedEligibleWorkdays} días ya transcurridos`)
+  ].join('');
+
+  const smsCreditSub = smsResult.startUsed
+    ? (smsResult.limitedByContract ? 'Crédito limitado por contrato' : 'Días naturales utilizables')
+    : 'Pendiente de fecha de inicio';
+
+  el.smsStats.innerHTML = [
+    statHtml('Crédito SMS', `${formatNumber(smsResult.totalDays)} días`, smsCreditSub),
+    statHtml('Saldo SMS', `${formatNumber(smsResult.remainingNaturalDays)} días`, 'Pendiente'),
+    statHtml('Consumidos SMS', `${formatNumber(smsResult.consumedNaturalDays)} días`, state.form.lactationStartDate ? 'Desde el inicio informado' : 'Pendiente de fecha de inicio'),
+    statHtml('Fin previsto SMS', smsResult.projectedEnd ? formatDate(smsResult.projectedEnd) : '—', smsResult.projectedEnd ? (smsResult.limitedByContract ? 'Limitado por contrato' : 'Dentro del periodo disponible') : 'Solo si se conoce la fecha de inicio')
+  ].join('');
 
   el.expedientSummary.innerHTML = `
     <p><strong>Situación:</strong> ${escapeHtml(labelizeCase(state.form.caseType))}</p>
-    <p><strong>Nº de Jornadas Lactancia:</strong> ${escapeHtml(String(hourResult.wholeDays))} &nbsp;&nbsp; <strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h`)}</p>
     <p><strong>Fecha causante:</strong> ${escapeHtml(formatDate(state.form.birthDate))}</p>
     <p><strong>Inicio contrato:</strong> ${escapeHtml(formatDate(state.form.contractStartDate))}</p>
     <p><strong>Fin contrato:</strong> ${escapeHtml(formatDate(state.form.contractEndDate || state.form.asOfDate || todayISO))}${state.form.contractEndDate ? '' : ' <em>(contrato abierto)</em>'}</p>
@@ -239,13 +235,14 @@ function renderCalculations() {
     <p><strong>Inicio efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.calcFrom))}</p>
     <p><strong>Fin por edad del menor:</strong> ${escapeHtml(formatDate(hourResult.lastEntitlementDay))}</p>
     <p><strong>Fin efectivo del cálculo:</strong> ${escapeHtml(formatDate(hourResult.effectiveLastEntitlementDay))}${hourResult.limitedByContract ? ' <em>(limitado por contrato)</em>' : ''}</p>
+    <p><strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h (${formatNumber(hourResult.eqDays)} jornadas equivalentes)`)}</p>
     <p><strong>Saldo acumulado SMS:</strong> ${escapeHtml(`${formatNumber(smsResult.remainingNaturalDays)} días naturales`)}</p>
   `;
 }
 
-function statHtml(label, value, sub, extraClass = '') {
+function statHtml(label, value, sub) {
   return `
-    <article class="stat ${escapeHtml(extraClass)}">
+    <article class="stat">
       <div class="label">${escapeHtml(label)}</div>
       <div class="value">${escapeHtml(value)}</div>
       <div class="sub">${escapeHtml(sub)}</div>
@@ -285,13 +282,13 @@ function computeHourEngine() {
 
   const allEligibleDays = hasWindow ? eachDay(calcFrom, effectiveWindowEndExclusive).filter(iso => {
     const weekday = toDate(iso).getDay();
-    return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges);
+    return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges, isolatedExcluded);
   }) : [];
 
   const consumedUntilExclusive = hasWindow ? minDateIso(asOfDate || todayISO, effectiveWindowEndExclusive) : '';
   const consumedEligibleDays = hasWindow ? eachDay(calcFrom, consumedUntilExclusive).filter(iso => {
     const weekday = toDate(iso).getDay();
-    return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges);
+    return workdays.includes(weekday) && !isolatedExcluded.includes(iso) && !isExcludedByRanges(iso, state.excludedRanges, isolatedExcluded);
   }) : [];
 
   const totalHours = round2(allEligibleDays.length * hourFactor);
@@ -301,7 +298,6 @@ function computeHourEngine() {
   const eqDays = dailyHours > 0 ? round2(remainingHours / dailyHours) : 0;
   const wholeDays = dailyHours > 0 ? Math.floor(remainingHours / dailyHours) : 0;
   const remainderHours = dailyHours > 0 ? round2(remainingHours - wholeDays * dailyHours) : 0;
-  const consumedEqDays = dailyHours > 0 ? round2(consumedHours / dailyHours) : 0;
 
   let noAvailabilityReason = '';
   if (!hasWindow) {
@@ -329,8 +325,7 @@ function computeHourEngine() {
     remainingHours,
     eqDays,
     wholeDays,
-    remainderHours,
-    consumedEqDays
+    remainderHours
   };
 }
 
@@ -483,12 +478,14 @@ function renderOcr() {
 }
 
 function getOcrSummary() {
+  const isolatedExcluded = parseExcludedDates(state.form.excludedDatesText);
   const rows = state.ocr.records.map(record => {
     const effectiveEnd = record.end || state.form.asOfDate || todayISO;
     const naturalDays = record.start ? diffDaysInclusive(record.start, effectiveEnd) : 0;
-    const workdays = record.start ? countWorkdaysInRange(record.start, effectiveEnd, state.form.workdays) : 0;
-    const hours = round2(workdays * Number(state.form.dailyHours || 0));
     const meta = canonicalizeConcept(record.concept);
+    const rangeWorkdays = meta.discountable ? FIXED_NON_COMPUTABLE_WEEKDAYS : state.form.workdays;
+    const workdays = record.start ? countWorkdaysInRange(record.start, effectiveEnd, rangeWorkdays, isolatedExcluded) : 0;
+    const hours = round2(workdays * Number(state.form.dailyHours || 0));
     return {
       ...record,
       ...meta,
@@ -540,9 +537,10 @@ function applyOcrToForm() {
 
     state.form.contractEndDate = incorporationRecord.end || '';
     el.contractEndDate.value = state.form.contractEndDate;
-  }
 
-  if (birthRecord?.end) {
+    state.form.lactationStartDate = incorporationRecord.start;
+    el.lactationStartDate.value = state.form.lactationStartDate;
+  } else if (birthRecord?.end) {
     state.form.lactationStartDate = toISO(addDays(toDate(birthRecord.end), 1));
     el.lactationStartDate.value = state.form.lactationStartDate;
   }
@@ -735,14 +733,16 @@ async function preprocessImage(file) {
   });
 }
 
-function countWorkdaysInRange(startIso, endIso, workdays) {
+function countWorkdaysInRange(startIso, endIso, workdays, excludedDates = []) {
   const start = toDate(startIso);
   const end = toDate(endIso);
   if (!start || !end || end < start) return 0;
+  const excluded = new Set((excludedDates || []).filter(Boolean));
   const cursor = new Date(start);
   let total = 0;
   while (cursor <= end) {
-    if (workdays.includes(cursor.getDay())) total += 1;
+    const iso = toISO(cursor);
+    if (workdays.includes(cursor.getDay()) && !excluded.has(iso)) total += 1;
     cursor.setDate(cursor.getDate() + 1);
   }
   return total;
@@ -756,7 +756,12 @@ function parseExcludedDates(text) {
     .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x));
 }
 
-function isExcludedByRanges(iso, ranges) {
+function isExcludedByRanges(iso, ranges, isolatedExcluded = []) {
+  const date = toDate(iso);
+  if (!date) return false;
+  const weekday = date.getDay();
+  if (!FIXED_NON_COMPUTABLE_WEEKDAYS.includes(weekday)) return false;
+  if ((isolatedExcluded || []).includes(iso)) return false;
   return ranges.some(r => r.start && r.end && iso >= r.start && iso <= r.end);
 }
 
