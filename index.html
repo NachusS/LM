@@ -15,7 +15,7 @@
           <div class="hero-copy">
             <div class="hero-badges">
               <span class="badge badge-blue">Hospital &#39;Rafael Méndez&#39;</span>
-              <span class="badge badge-green">v5 · 17/04/2026 07:54</span>
+              <span class="badge badge-green">v6 · 17/04/2026 11:31</span>
               <span class="badge">@NachusS</span>
             </div>
             <h1>Calculadora de lactancia SMS 2026</h1>
@@ -70,6 +70,16 @@
                   </label>
 
                   <label>
+                    <span>Fecha inicio contrato</span>
+                    <input id="contractStartDate" type="date" />
+                  </label>
+
+                  <label>
+                    <span>Fecha fin contrato</span>
+                    <input id="contractEndDate" type="date" />
+                  </label>
+
+                  <label>
                     <span>Inicio real del disfrute de lactancia</span>
                     <input id="lactationStartDate" type="date" />
                   </label>
@@ -86,7 +96,7 @@
 
                   <label>
                     <span>Horas de jornada diaria</span>
-                    <input id="dailyHours" type="number" min="1" step="0.25" value="7.5" />
+                    <input id="dailyHours" type="number" min="1" step="0.25" value="7" />
                   </label>
                 </div>
               </section>
@@ -169,7 +179,7 @@
                 <div class="card-header">
                   <div>
                     <h2>Reconocimiento de movimientos</h2>
-                    <p>Sube una captura con Tipo de Movimiento, Fecha Inicio y Fecha Fin.</p>
+                    <p>Sube una captura con Tipo de Movimiento, Fecha Inicio y Fecha Fin. El OCR rellenará también contrato e identificará PERMISO NACIMIENTO.</p>
                   </div>
                 </div>
 
@@ -251,7 +261,7 @@
                     <li>Detecta Tipo de Movimiento, Fecha Inicio y Fecha Fin.</li>
                     <li>Agrupa la información en filas editables.</li>
                     <li>Si el fin no aparece, usa la fecha de consulta.</li>
-                    <li>Pasa los datos útiles al formulario principal.</li>
+                    <li>Pasa los datos útiles al formulario principal, incluyendo contrato y PERMISO NACIMIENTO.</li>
                   </ol>
                 </article>
               </div>

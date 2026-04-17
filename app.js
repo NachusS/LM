@@ -10,8 +10,8 @@ const WEEKDAYS = [
 
 const MOVEMENT_DEFINITIONS = [
   { key: 'ESTATUTARIO_INTERINO', label: 'ESTATUTARIO INTERINO', regex: /ESTATUTARIO\s+INTERINO/i, discountable: false },
-  { key: 'INCORPORACION_ESTATUTARIO', label: 'INCORPORACION ESTATUTARIO', regex: /INCORPORACION\s+ESTATUTARIO/i, discountable: false },
-  { key: 'PERMISO_NACIMIENTO_MADRE', label: 'PERMISO DE NACIMIENTO MADRE', regex: /PERMISO\s+DE\s+NACIMIENTO\s+MADRE/i, discountable: false },
+  { key: 'INCORPORACION_ESTATUTARIO', label: 'INCORPORACION ESTATUTARIO', regex: /INCORPORACION\s+ESTATUTA(?:RIO|TIO|ATIO)|INCORPORACION\s+ESTATUTARIO/i, discountable: false },
+  { key: 'PERMISO_NACIMIENTO', label: 'PERMISO NACIMIENTO', regex: /PERMISO\s+(?:DE\s+)?NACIMIENTO/i, discountable: false },
   { key: 'RIESGO_DURANTE_EL_EMBARAZO', label: 'RIESGO DURANTE EL EMBARAZO', regex: /RIESGO\s+DURANTE\s+EL\s+EMBARAZO/i, discountable: true },
   { key: 'ASUNTOS_PARTICULARES', label: 'ASUNTOS PARTICULARES (6)', regex: /ASUNTOS\s+PARTICULARES/i, discountable: true },
   { key: 'CURSOS_FORMACION_CONTINUADA', label: 'CURSOS\/FORMACION CONTINUADA', regex: /CURSOS?\s*\/\s*FORMACION\s+CONTINUADA|FORMACION\s+CONTINUADA/i, discountable: true },
@@ -37,10 +37,12 @@ const state = {
     enjoymentMode: 'sms28',
     birthDate: '',
     leaveEndDate: '',
+    contractStartDate: '',
+    contractEndDate: '',
     lactationStartDate: '',
     asOfDate: todayISO,
     multipleChildren: 1,
-    dailyHours: 7.5,
+    dailyHours: 7,
     excludedDatesText: '',
     alreadyUsedHours: 0,
     notes: '',
@@ -73,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function cacheDom() {
   [
-    'caseType', 'enjoymentMode', 'birthDate', 'leaveEndDate', 'lactationStartDate', 'asOfDate',
+    'caseType', 'enjoymentMode', 'birthDate', 'leaveEndDate', 'contractStartDate', 'contractEndDate', 'lactationStartDate', 'asOfDate',
     'multipleChildren', 'dailyHours', 'excludedDatesText', 'alreadyUsedHours', 'notes',
     'workdays', 'excludedRanges', 'hourStats', 'smsStats', 'expedientSummary', 'resultSubtitle',
     'calcWarnings', 'addRangeBtn', 'ocrFileInput', 'ocrStatus', 'ocrPreviewWrap', 'ocrPreview',
@@ -95,7 +97,7 @@ function bindTabs() {
 }
 
 function bindFormInputs() {
-  ['caseType', 'enjoymentMode', 'birthDate', 'leaveEndDate', 'lactationStartDate', 'asOfDate', 'excludedDatesText', 'notes']
+  ['caseType', 'enjoymentMode', 'birthDate', 'leaveEndDate', 'contractStartDate', 'contractEndDate', 'lactationStartDate', 'asOfDate', 'excludedDatesText', 'notes']
     .forEach(id => el[id].addEventListener('input', () => updateForm(id, el[id].value)));
 
   ['multipleChildren', 'dailyHours', 'alreadyUsedHours']
@@ -212,6 +214,8 @@ function renderCalculations() {
   el.expedientSummary.innerHTML = `
     <p><strong>Situación:</strong> ${escapeHtml(labelizeCase(state.form.caseType))}</p>
     <p><strong>Fecha causante:</strong> ${escapeHtml(formatDate(state.form.birthDate))}</p>
+    <p><strong>Inicio contrato:</strong> ${escapeHtml(formatDate(state.form.contractStartDate))}</p>
+    <p><strong>Fin contrato:</strong> ${escapeHtml(formatDate(state.form.contractEndDate || state.form.asOfDate || todayISO))}${state.form.contractEndDate ? '' : ' <em>(contrato abierto)</em>'}</p>
     <p><strong>Inicio del disfrute comunicado:</strong> ${escapeHtml(formatDate(state.form.lactationStartDate))}</p>
     <p><strong>Fin del derecho por edad:</strong> ${escapeHtml(formatDate(hourResult.lastEntitlementDay))}</p>
     <p><strong>Saldo por horas:</strong> ${escapeHtml(`${formatNumber(hourResult.remainingHours)} h (${formatNumber(hourResult.eqDays)} jornadas equivalentes)`)}</p>
@@ -440,7 +444,7 @@ function updateOcrRecord(id, field, value) {
 
 function applyOcrToForm() {
   const records = getOcrSummary().rows;
-  const birthRecord = chooseBestMovementRecord(records, 'PERMISO_NACIMIENTO_MADRE');
+  const birthRecord = chooseBestMovementRecord(records, 'PERMISO_NACIMIENTO');
   const incorporationRecord = chooseBestMovementRecord(records, 'INCORPORACION_ESTATUTARIO');
   const discountableRanges = records.filter(r => r.discountable && r.start).map(r => ({
     start: r.start,
@@ -454,13 +458,17 @@ function applyOcrToForm() {
     el.caseType.value = state.form.caseType;
     el.birthDate.value = state.form.birthDate;
 
-    if (birthRecord.end) {
-      state.form.leaveEndDate = birthRecord.end;
-      el.leaveEndDate.value = state.form.leaveEndDate;
-    }
+    state.form.leaveEndDate = birthRecord.end || '';
+    el.leaveEndDate.value = state.form.leaveEndDate;
   }
 
   if (incorporationRecord?.start) {
+    state.form.contractStartDate = incorporationRecord.start;
+    el.contractStartDate.value = state.form.contractStartDate;
+
+    state.form.contractEndDate = incorporationRecord.end || '';
+    el.contractEndDate.value = state.form.contractEndDate;
+
     state.form.lactationStartDate = incorporationRecord.start;
     el.lactationStartDate.value = state.form.lactationStartDate;
   } else if (birthRecord?.end) {
